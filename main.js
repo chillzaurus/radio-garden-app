@@ -157,6 +157,11 @@ function updateTrayMenu() {
 
   var trayMenu = Menu.buildFromTemplate([
     {
+      label: 'v' + app.getVersion(),
+      enabled: false
+    },
+    { type: 'separator' },
+    {
       label: 'Open Radio Garden',
       click: function() { fadeIn(); }
     },
@@ -299,6 +304,21 @@ function fadeOutAndHide() {
 
 // ── App Ready ─────────────────────────────────────────────────────────────────
 
+// ── Single instance lock ─────────────────────────────────────────────────────
+
+var gotLock = app.requestSingleInstanceLock();
+
+if (!gotLock) {
+  app.quit();
+} else {
+  app.on('second-instance', function() {
+    if (mainWindow) {
+      if (!mainWindow.isVisible()) fadeIn();
+      mainWindow.focus();
+    }
+  });
+}
+
 app.whenReady().then(function() {
   // Block ad/tracker requests at the network level
   var adHosts = [
@@ -354,5 +374,25 @@ app.whenReady().then(function() {
   });
 
   startNowPlayingPoller();
+
+  // Check for updates on startup
+  try {
+    var updater = require('electron-updater').autoUpdater;
+    updater.setFeedURL({
+      provider: 'github',
+      owner: 'chillzaurus',
+      repo: 'radio-garden-app'
+    });
+    updater.checkForUpdatesAndNotify();
+    updater.on('update-available', function() {
+      var { dialog } = require('electron');
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update available',
+        message: 'A new version is available. It will download in the background and install when you quit the app.',
+        buttons: ['OK']
+      });
+    });
+  } catch(e) {}
 
 });
