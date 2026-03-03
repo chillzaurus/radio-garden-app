@@ -1,6 +1,50 @@
-const { contextBridge, ipcRenderer } = require('electron');
-
-contextBridge.exposeInMainWorld('promptAPI', {
-  submit: (value) => ipcRenderer.send('prompt-result', value),
-  cancel: () => ipcRenderer.send('prompt-result', null)
-});
+{
+  "name": "radiogardenapp",
+  "version": "1.0.2",
+  "description": "Minimal Radio Garden desktop app",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder"
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "electron-updater": "^6.1.0"
+  },
+  "devDependencies": {
+    "electron": "^28.0.0",
+    "electron-builder": "^24.0.0"
+  },
+  "build": {
+    "appId": "com.radiogarden.app",
+    "productName": "Radio Garden",
+    "win": {
+      "target": "nsis",
+      "icon": "icon.ico"
+    },
+    "linux": {
+      "target": "AppImage",
+      "icon": "icon.ico",
+      "category": "AudioVideo"
+    },
+    "files": [
+      "main.js",
+      "prompt-preload.js",
+      "icon.ico",
+      "package.json",
+      "node_modules/**/*"
+    ],
+    "publish": {
+      "provider": "github",
+      "owner": "chillzaurus",
+      "repo": "radio-garden-app"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true
+    }
+  }
+}
