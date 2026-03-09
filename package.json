@@ -30,8 +30,10 @@
     },
     "files": [
       "main.js",
+      "mini-preload.js",
       "prompt-preload.js",
       "icon.ico",
+      "icon.png",
       "package.json",
       "node_modules/**/*"
     ],

@@ -358,6 +358,10 @@ function updateTrayMenu() {
 function createWindow() {
   var savedState = loadWindowState();
 
+  const iconPath = process.platform === 'linux' 
+    ? path.join(__dirname, 'icon.png') 
+    : path.join(__dirname, 'icon.ico');
+
   mainWindow = new BrowserWindow({
     x: savedState.x,
     y: savedState.y,
@@ -367,7 +371,7 @@ function createWindow() {
     titleBarStyle: 'default',
     autoHideMenuBar: true,
     backgroundColor: '#121212',
-    icon: path.join(__dirname, 'icon.ico'),
+    icon: iconPath,
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -423,7 +427,10 @@ function createWindow() {
   mainWindow.on('move', saveWindowState);
 
   mainWindow.on('close', function(event) {
-    if (!app.isQuiting) { event.preventDefault(); fadeOutAndHide(); }
+    if (!app.isQuiting) {
+      event.preventDefault();
+      fadeOutAndHide();
+    }
   });
 }
 
@@ -506,7 +513,11 @@ app.whenReady().then(function() {
   createWindow();
   globalShortcut.register('Control+R', function() { mainWindow.reload(); });
 
-  tray = new Tray(path.join(__dirname, 'icon.ico'));
+  const trayIconPath = process.platform === 'linux' 
+    ? path.join(__dirname, 'icon.png') 
+    : path.join(__dirname, 'icon.ico');
+
+  tray = new Tray(trayIconPath);
   tray.setToolTip('Radio Garden');
   updateTrayMenu();
 
