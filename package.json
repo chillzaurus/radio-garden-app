@@ -1,7 +1,7 @@
 {
   "name": "radiogardenapp",
-  "version": "1.0.4",
-  "description": "Minimal Radio Garden desktop app",
+  "version": "1.1.0",
+  "description": "Unofficial Radio Garden desktop app",
   "main": "main.js",
   "scripts": {
     "start": "electron .",
@@ -31,6 +31,8 @@
     },
     "files": [
       "main.js",
+      "preload.js",
+      "folders-inject.js",
       "prompt-preload.js",
       "icon.ico",
       "package.json",

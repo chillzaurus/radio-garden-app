@@ -254,6 +254,7 @@ function showAbout() {
     '        <div class="panel-title">Shortcuts</div>',
     '        <div class="row"><span class="lbl">Open Favorites</span><span class="key">F</span></div>',
     '        <div class="row"><span class="lbl">Play / Pause</span><span class="key">Space</span></div>',
+    '        <div class="row"><span class="lbl">Browse Favorites</span><span class="key">↑ ↓</span></div>',
     '        <div class="row"><span class="lbl">Reload</span><span class="key">Ctrl+R</span></div>',
     '      </div>',
     '      <div class="panel">',
@@ -356,7 +357,7 @@ function initDiscord() {
 
 function pollDiscordStation() {
   setInterval(function() {
-    if (!mainWindow) return;
+    if (!mainWindow || mainWindow.isDestroyed()) return;
     mainWindow.webContents.executeJavaScript(
       '(function() {' +
       '  var channelEl = document.querySelector("[aria-label^=\'Now Playing:\']");' +
@@ -421,18 +422,18 @@ function recordListening(city, stationName) {
   var d = new Date(); var today = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0');
   if (!listeningStats[today]) listeningStats[today] = {};
   if (!listeningStats[today][country]) listeningStats[today][country] = 0;
-  listeningStats[today][country] += 5;
+  listeningStats[today][country] += 2;
   // Track station
   if (stationName) {
     if (!listeningStats[today]['__stations__']) listeningStats[today]['__stations__'] = {};
     if (!listeningStats[today]['__stations__'][stationName]) listeningStats[today]['__stations__'][stationName] = 0;
-    listeningStats[today]['__stations__'][stationName] += 5;
+    listeningStats[today]['__stations__'][stationName] += 2;
   }
   // Track hour
   var hour = new Date().getHours();
   if (!listeningStats[today]['__hours__']) listeningStats[today]['__hours__'] = {};
   var hk = String(hour);
-  listeningStats[today]['__hours__'][hk] = (listeningStats[today]['__hours__'][hk] || 0) + 5;
+  listeningStats[today]['__hours__'][hk] = (listeningStats[today]['__hours__'][hk] || 0) + 2;
   saveListeningStats();
   if (aboutWindow && !aboutWindow.isDestroyed() && aboutWindowReady) {
     var s = getStatsForAbout();
@@ -582,6 +583,22 @@ function getStatsForAbout() {
   };
 }
 
+
+// ── Favorites Folders ─────────────────────────────────────────────────────────
+var foldersPath = null;
+function getFoldersPath() {
+  if (!foldersPath) foldersPath = path.join(app.getPath('userData'), 'favorites-folders.json');
+  return foldersPath;
+}
+function loadFolders() {
+  try { return JSON.parse(fs.readFileSync(getFoldersPath())); } catch(e) { return { folders: [], assignments: {} }; }
+}
+function saveFolders(data) {
+  try { fs.writeFileSync(getFoldersPath(), JSON.stringify(data)); } catch(e) {}
+}
+ipcMain.handle('folders-load', function() { return loadFolders(); });
+ipcMain.handle('folders-save', function(e, data) { saveFolders(data); return true; });
+
 // ── Tray Menu ─────────────────────────────────────────────────────────────────
 
 function updateTrayMenu() {
@@ -682,7 +699,8 @@ function createWindow() {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false
+      sandbox: false,
+      preload: path.join(__dirname, 'preload.js')
     }
   });
 
@@ -699,6 +717,10 @@ function createWindow() {
 
   mainWindow.webContents.on('did-finish-load', function() {
     mainWindow.webContents.insertCSS('body { overflow: hidden; border-radius: 12px; }');
+    try {
+      var injectCode = fs.readFileSync(path.join(__dirname, 'folders-inject.js'), 'utf8');
+      mainWindow.webContents.executeJavaScript(injectCode).catch(function(e) { console.error('folders inject error:', e); });
+    } catch(e) { console.error('folders inject read error:', e); }
   });
 
   mainWindow.webContents.on('before-input-event', function(event, input) {
@@ -841,19 +863,35 @@ app.whenReady().then(function() {
 
   try {
     var updater = require('electron-updater').autoUpdater;
+    updater.autoInstallOnAppQuit = true;
     updater.setFeedURL({
       provider: 'github',
       owner: 'chillzaurus',
       repo: 'radio-garden-app'
     });
     updater.checkForUpdatesAndNotify();
-    updater.on('update-available', function() {
+    updater.on('update-available', function(info) {
       var { dialog } = require('electron');
       dialog.showMessageBox({
         type: 'info',
         title: 'Update available',
-        message: 'A new version is available. It will download in the background and install when you quit the app.',
+        message: 'v' + info.version + ' is downloading in the background. You\'ll be prompted to install when it\'s ready.',
         buttons: ['OK']
+      });
+    });
+    updater.on('update-downloaded', function(info) {
+      var { dialog } = require('electron');
+      dialog.showMessageBox({
+        type: 'info',
+        title: 'Update ready',
+        message: 'v' + info.version + ' has been downloaded. Restart now to install?',
+        buttons: ['Restart now', 'Later'],
+        defaultId: 0
+      }).then(function(result) {
+        if (result.response === 0) {
+          app.isQuiting = true;
+          updater.quitAndInstall();
+        }
       });
     });
   } catch(e) {}
