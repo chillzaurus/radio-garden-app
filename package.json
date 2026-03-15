@@ -22,22 +22,33 @@
     "productName": "Radio Garden",
     "win": {
       "target": "nsis",
-      "icon": "icon.ico"
+      "icon": "icon.ico",
+      "files": [
+        "!icon.png"
+      ]
     },
     "linux": {
       "target": "AppImage",
       "icon": "icon.png",
-      "category": "AudioVideo"
+      "category": "AudioVideo",
+      "files": [
+        "!icon.ico"
+      ]
     },
     "files": [
       "main.js",
+      "mini-preload.js",
       "preload.js",
       "folders-inject.js",
       "prompt-preload.js",
       "icon.ico",
+      "icon.png",
       "package.json",
-      "node_modules/**/*"
+      "!**/*.map",
+      "!**/node_modules/*/{CHANGELOG.md,README.md,README,readme.md,readme}",
+      "!**/node_modules/*/{test,tests,tests.js,test.js}"
     ],
+    "electronLanguages": ["en"],
     "publish": {
       "provider": "github",
       "owner": "chillzaurus",

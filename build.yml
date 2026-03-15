@@ -28,8 +28,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 18
-      - run: sudo apt-get install -y imagemagick
-      - run: convert icon.ico[0] icon.png
       - run: npm install
       - run: npm run dist -- --linux --publish always
         env:

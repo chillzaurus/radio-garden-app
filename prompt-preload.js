@@ -25,7 +25,7 @@
     },
     "linux": {
       "target": "AppImage",
-      "icon": "icon.ico",
+      "icon": "icon.png",
       "category": "AudioVideo"
     },
     "files": [
