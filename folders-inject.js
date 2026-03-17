@@ -107,12 +107,6 @@
   ].join('\n');
   document.head.appendChild(style);
 
-  // Hide Edit button and lock overflow
-  var hideStyle = document.createElement('style');
-  hideStyle.textContent = [
-    '[class*=_content_63z57] { overflow:hidden !important; position:relative !important; }',
-  ].join('\n');
-  document.head.appendChild(hideStyle);
 
   var picker = null;
   function closePicker() { if (picker) { picker.remove(); picker = null; } }
@@ -904,6 +898,9 @@
     closeColorPicker();
     var ov = document.querySelector('.__fov');
     if (ov) ov.remove();
+    // Restore overflow on content element
+    var contentEl = document.querySelector('[class*=_content_63z57]');
+    if (contentEl) { contentEl.style.overflow = ''; contentEl.style.position = ''; }
     var editBtn = document.querySelector('[data-id="edit-button"]');
     if (editBtn) editBtn.style.display = '';
     document.querySelectorAll('.__fov-addfolder').forEach(function(b) { b.remove(); });

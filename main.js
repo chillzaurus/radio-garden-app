@@ -759,8 +759,20 @@ function createWindow() {
   mainWindow.on('resize', saveWindowState);
   mainWindow.on('move', saveWindowState);
 
+  var hasShownTrayHint = false;
   mainWindow.on('close', function(event) {
-    if (!app.isQuiting) { event.preventDefault(); fadeOutAndHide(); }
+    if (!app.isQuiting) {
+      event.preventDefault();
+      fadeOutAndHide();
+      if (!hasShownTrayHint) {
+        hasShownTrayHint = true;
+        tray.displayBalloon({
+          title: 'Radio Garden',
+          content: 'Still running in the tray. Click the icon to reopen.',
+          iconType: 'info'
+        });
+      }
+    }
   });
 }
 
