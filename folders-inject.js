@@ -3,7 +3,7 @@
   window.__foldersInjected = true;
 
   var ipc = window.__rgFolders;
-  var state = { folders: [], assignments: {}, collapsed: {}, order: [], sortMode: 'manual', folderColors: {} };
+  var state = { folders: [], assignments: {}, collapsed: {}, order: [], sortMode: 'manual', folderColors: {}, compact: false };
   var activeKey = null;
   var dragKey = null;
   var needsPin = false; // set true when station changes, cleared after scroll
@@ -16,6 +16,7 @@
     state.collapsed = data.collapsed || {};
     state.order = data.order || [];
     state.sortMode = data.sortMode || 'manual';
+    state.compact = data.compact || false;
     state.folderColors = data.folderColors || {};
   }
   function saveState() {
@@ -25,15 +26,16 @@
       collapsed: state.collapsed,
       order: state.order,
       sortMode: state.sortMode,
+      compact: state.compact,
       folderColors: state.folderColors
     });
   }
 
   function getStations() {
-    var rows = Array.from(document.querySelectorAll('[class*=_link_1drg2]')).reverse();
+    var rows = Array.from(document.querySelectorAll('[class*=_link_][role="button"]')).reverse();
     return rows.map(function(el) {
-      var nameEl = el.querySelector('[class*=_title_1drg2]');
-      var cityEl = el.querySelector('[class*=_subtitle_1drg2]');
+      var nameEl = el.querySelector('[class*=_title_][dir="auto"]');
+      var cityEl = el.querySelector('[class*=_subtitle_][dir="auto"]');
       var name = nameEl ? nameEl.innerText.trim() : '';
       var city = cityEl ? cityEl.innerText.trim() : '';
       return { el: el, name: name, city: city, key: name + '|' + city };
@@ -46,7 +48,7 @@
     '.__fov-addfolder { white-space:nowrap; cursor:pointer; font-family:inherit; font-size:12px; font-weight:500; color:#fff; transition:color 0.15s; background:transparent; border:none; padding:0; }',
     '.__fov-addfolder:hover { color:#00c864; }',
     '.__fov-top { display:flex; flex-direction:column; flex-shrink:0; }',
-    '.__fov-search-wrap { position:relative; flex-shrink:0; background:#222; border-bottom:1px solid #2f2f2f; }',
+    '.__fov-search-wrap { position:relative; flex-shrink:0; background:#222; border-bottom:1px solid #2f2f2f; z-index:2; }',
     '.__fov-search { background:transparent; border:none; color:#ddd; font-size:13px; font-family:inherit; padding:7px 32px 7px 12px; outline:none; width:100%; box-sizing:border-box; }',
     '.__fov-search::placeholder { color:#444; }',
     '.__fov-search-clear { position:absolute; right:8px; top:50%; transform:translateY(-50%); background:none; border:none; color:#555; font-size:14px; cursor:pointer; padding:2px 4px; line-height:1; display:none; }',
@@ -78,6 +80,13 @@
     '.__fov-folder-del:hover { color:#e05555; }',
     '.__fov-folder-stations { background:#232323; }',
     '.__fov-station { display:flex; align-items:center; padding:10px 12px 10px 28px; cursor:pointer; gap:8px; border-top:1px solid rgba(255,255,255,0.05); }',
+    '.__fov.compact .__fov-station { padding-top:5px; padding-bottom:5px; }',
+    '.__fov.compact .__fov-station-city { display:none; }',
+    '.__fov.compact .__fov-station-name { font-size:13px; }',
+    '.__fov.compact .__fov-folder-header { padding:6px 10px; }',
+    '.__fov.compact .__fov-folder-name-input { font-size:12px; }',
+    '.__fov.compact .__fov-folder { margin-bottom:2px; }',
+
     '.__fov-station:hover { background:#2a2a2a; }',
     '.__fov-station-info { flex:1; min-width:0; }',
     '.__fov-station-name { font-size:16px; color:#e0e0e0; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }',
@@ -164,8 +173,8 @@
       editBtn.click();
 
       setTimeout(function() {
-        var nativeRow = Array.from(document.querySelectorAll('[class*=_link_1drg2]')).find(function(el) {
-          var n = el.querySelector('[class*=_title_1drg2]');
+        var nativeRow = Array.from(document.querySelectorAll('[class*=_link_][role="button"]')).find(function(el) {
+          var n = el.querySelector('[class*=_title_][dir="auto"]');
           return n && n.innerText.trim() === stationName;
         });
         var favBtn = nativeRow ? nativeRow.querySelector('[data-accessory="favorite"]') : null;
@@ -205,7 +214,8 @@
   }
 
   function syncActiveHighlight(andScroll) {
-    var nameEl = document.querySelector('[class*=_title_b4zv2]');
+    var nowPlaying = document.querySelector('[aria-label^="Now Playing:"]');
+    var nameEl = nowPlaying ? nowPlaying.querySelector('[class*=_title][dir="auto"], [class*=_title_]') : null;
     if (!nameEl) return;
     var playingName = nameEl.innerText.trim();
     if (!playingName) {
@@ -334,6 +344,7 @@
   function render() {
     var ov = document.querySelector('.__fov');
     if (!ov) return;
+    ov.classList.toggle('compact', !!state.compact);
     var searchInput = ov.querySelector('.__fov-search'); // inside .__fov-search-wrap
     var filterText = searchInput ? searchInput.value.trim().toLowerCase() : '';
     var allStations = getStations();
@@ -575,8 +586,27 @@
           saveState();
           render();
         };
+        var compactBtn = document.createElement('button');
+        compactBtn.className = '__fov-sort-btn' + (state.compact ? ' active' : '');
+        compactBtn.textContent = '▤';
+        compactBtn.title = 'Compact view';
+        compactBtn.onclick = function(e) {
+          e.stopPropagation();
+          state.compact = !state.compact;
+          saveState();
+          var ov = document.querySelector('.__fov');
+          if (ov) ov.classList.toggle('compact', state.compact);
+          compactBtn.className = '__fov-sort-btn' + (state.compact ? ' active' : '');
+          compactBtn.textContent = '▤';
+          compactBtn.title = state.compact ? 'Switch to normal view' : 'Switch to compact view';
+          compactBtn.textContent = '▤';
+        };
+        var btnGroup = document.createElement('div');
+        btnGroup.style.cssText = 'display:flex;gap:4px;';
+        btnGroup.appendChild(compactBtn);
+        btnGroup.appendChild(sortBtn);
         lbl.appendChild(lblText);
-        lbl.appendChild(sortBtn);
+        lbl.appendChild(btnGroup);
         sec.appendChild(lbl);
       }
       sec.ondragover = function(e) { e.preventDefault(); sec.classList.add('drag-over'); };
@@ -884,7 +914,7 @@
     var href = window.location.href;
     if (href.includes('/favourites') || href.includes('/favorites')) return true;
     // Check nav active class - but NOT edit button (too unreliable during transitions)
-    var favNav = Array.from(document.querySelectorAll('[class*=_navItem], [class*=_tab], nav a, nav button'))
+    var favNav = Array.from(document.querySelectorAll('[class*=_navItem], [class*=_tab], [class*=_nav] a, [class*=_nav] button, nav a, nav button'))
       .find(function(el) { return el.innerText && el.innerText.trim().toLowerCase() === 'favorites'; });
     if (favNav) {
       return favNav.getAttribute('aria-selected') === 'true' ||
@@ -899,7 +929,7 @@
     var ov = document.querySelector('.__fov');
     if (ov) ov.remove();
     // Restore overflow on content element
-    var contentEl = document.querySelector('[class*=_content_63z57]');
+    var contentEl = document.querySelector('[data-id="page-content"]');
     if (contentEl) { contentEl.style.overflow = ''; contentEl.style.position = ''; }
     var editBtn = document.querySelector('[data-id="edit-button"]');
     if (editBtn) editBtn.style.display = '';
@@ -908,7 +938,7 @@
   }
 
   function check() {
-    var contentEl = document.querySelector('[class*=_content_63z57]');
+    var contentEl = document.querySelector('[data-id="page-content"]');
     if (!contentEl) { unmountOverlay(); return; }
     if (isFavoritesActive() && getStations().length > 0) {
       var alreadyMounted = !!contentEl.querySelector('.__fov');
