@@ -6,6 +6,7 @@
   var state = { folders: [], assignments: {}, collapsed: {}, order: [], sortMode: 'manual', folderColors: {}, compact: false };
   var activeKey = null;
   var dragKey = null;
+  var pauseObserver = false;
   var needsPin = false; // set true when station changes, cleared after scroll
   var lastScrolledKey = null; // track last key we scrolled to
 
@@ -163,35 +164,77 @@
       closePicker();
       var stationName = stationKey.split('|')[0];
 
-      // Optimistically remove from our UI immediately
+      // Optimistically update our UI
       delete state.assignments[stationKey];
       saveState();
+      render();
+      pauseObserver = true;
 
-      // Click Edit invisibly (overlay stays visible on top)
-      var editBtn = document.querySelector('[data-id="edit-button"][aria-label="Edit"]');
-      if (!editBtn) { render(); return; }
-      editBtn.click();
-
-      setTimeout(function() {
-        var nativeRow = Array.from(document.querySelectorAll('[class*=_link_][role="button"]')).find(function(el) {
-          var n = el.querySelector('[class*=_title_][dir="auto"]');
-          return n && n.innerText.trim() === stationName;
-        });
-        var favBtn = nativeRow ? nativeRow.querySelector('[data-accessory="favorite"]') : null;
-        if (favBtn) {
-          favBtn.click();
-          setTimeout(function() {
-            var doneBtn = document.querySelector('[data-id="edit-button"][aria-label="Done"]');
-            if (doneBtn) doneBtn.click();
-            // Re-render after native list updates
-            setTimeout(function() { render(); }, 200);
-          }, 200);
-        } else {
-          var doneBtn = document.querySelector('[data-id="edit-button"]');
-          if (doneBtn) doneBtn.click();
-          render();
+      function fireReactClick(el) {
+        var fk = Object.keys(el).find(function(k) { return k.startsWith('__reactFiber'); });
+        if (!fk) { el.click(); return; }
+        var f = el[fk];
+        while (f) {
+          if (f.memoizedProps && f.memoizedProps.onClick) {
+            f.memoizedProps.onClick({ type:'click', preventDefault:function(){}, stopPropagation:function(){} });
+            return;
+          }
+          f = f.return;
         }
-      }, 400);
+        el.click();
+      }
+
+      function tryRemoveFromPlayer() {
+        // Player bar heart: aria-label="remove X from favorites"
+        var heart = Array.from(document.querySelectorAll('[aria-label]')).find(function(el) {
+          var lbl = el.getAttribute('aria-label') || '';
+          return lbl === 'remove ' + stationName + ' from favorites';
+        });
+        if (!heart) return false;
+        fireReactClick(heart);
+        setTimeout(function() { pauseObserver = false; render(); }, 500);
+        return true;
+      }
+
+      function tryRemoveFromEditMode() {
+        // Edit mode hearts: aria-label="remove from favorites", find by matching row title
+        var hearts = Array.from(document.querySelectorAll('[data-accessory="favorite"]'));
+        var heart = hearts.find(function(h) {
+          // Walk up to find the row div, then look for title text
+          var el = h.parentElement;
+          while (el && !el.querySelector('[dir="auto"]')) el = el.parentElement;
+          if (!el) return false;
+          var title = el.querySelector('[dir="auto"]');
+          return title && title.innerText.trim() === stationName;
+        });
+        if (!heart) return false;
+        fireReactClick(heart);
+        // Exit edit mode
+        setTimeout(function() {
+          var doneBtn = document.querySelector('[data-id="edit-button"][aria-label="Done"]');
+          if (doneBtn) { doneBtn.style.display=''; fireReactClick(doneBtn); doneBtn.style.display='none'; }
+          setTimeout(function() { pauseObserver = false; render(); }, 300);
+        }, 300);
+        return true;
+      }
+
+      // Try player heart first (station already playing)
+      if (tryRemoveFromPlayer()) return;
+
+      // Enter edit mode
+      var editBtn = document.querySelector('[data-id="edit-button"]');
+      if (!editBtn) { pauseObserver = false; return; }
+      editBtn.style.display = '';
+      fireReactClick(editBtn);
+      editBtn.style.display = 'none';
+
+      // Poll for edit mode hearts
+      var attempts = 0;
+      var poll = setInterval(function() {
+        attempts++;
+        if (tryRemoveFromEditMode()) { clearInterval(poll); }
+        else if (attempts > 20) { clearInterval(poll); pauseObserver = false; }
+      }, 150);
     };
     picker.appendChild(removeItem);
 
@@ -341,6 +384,23 @@
     }, 0);
   }
 
+
+  function updateTitleBadge() {
+    var titleEl = document.querySelector('[id="bht"]');
+    if (!titleEl) return;
+    var count = getStations().length;
+    // Remove existing badge if any
+    var existing = titleEl.querySelector('.__fov-title-badge');
+    if (existing) existing.remove();
+    if (count > 0) {
+      var badge = document.createElement('span');
+      badge.className = '__fov-title-badge';
+      badge.textContent = ' (' + count + ')';
+      badge.style.cssText = 'font-size:0.75em; opacity:0.5; font-weight:400;';
+      titleEl.appendChild(badge);
+    }
+  }
+
   function render() {
     var ov = document.querySelector('.__fov');
     if (!ov) return;
@@ -406,12 +466,10 @@
           e.dataTransfer.setData('folder-drag', fid);
           e.stopPropagation();
           setTimeout(function() { folder.classList.add('folder-dragging'); }, 0);
-          freezeDrawer();
         };
         folder.ondragend = function() {
           folder.classList.remove('folder-dragging');
           document.querySelectorAll('.__fov-folder-drop-line').forEach(function(l) { l.remove(); });
-          setTimeout(thawDrawer, 100);
         };
         function clearDropLines() {
           document.querySelectorAll('.__fov-folder-drop-line').forEach(function(l) { l.remove(); });
@@ -575,8 +633,8 @@
         var lblText = document.createElement('span');
         lblText.textContent = 'All stations';
         var sortBtn = document.createElement('button');
-        var sortModes = ['manual','location','continent'];
-        var sortLabels = {'manual':'⊙ Sort','location':'⊙ By location','continent':'⊙ By continent'};
+        var sortModes = ['manual','name','location','continent'];
+        var sortLabels = {'manual':'⊙ Sort','name':'⊙ A–Z','location':'⊙ By location','continent':'⊙ By continent'};
         sortBtn.className = '__fov-sort-btn' + (state.sortMode !== 'manual' ? ' active' : '');
         sortBtn.textContent = sortLabels[state.sortMode] || '⊙ Sort';
         sortBtn.onclick = function(e) {
@@ -638,7 +696,17 @@
         }
         return 'Other';
       }
-      if (state.sortMode === 'location') {
+      // Helper: strip leading "Radio", "FM", "The" for sort key
+      function sortName(name) {
+        return name.replace(/^(radio|the|fm|am)\s+/i, '').trim().toLowerCase();
+      }
+
+      if (state.sortMode === 'name') {
+        displayUnassigned.sort(function(a, b) {
+          return sortName(a.name).localeCompare(sortName(b.name));
+        });
+        displayUnassigned.forEach(function(s) { sec.appendChild(makeRow(s, true)); });
+      } else if (state.sortMode === 'location') {
         displayUnassigned.sort(function(a, b) {
           var ac = getCountry(a.city), bc = getCountry(b.city);
           if (ac !== bc) return ac.localeCompare(bc);
@@ -671,6 +739,7 @@
     }
     // Reapply highlights after render (no scroll)
     setTimeout(function() { syncActiveHighlight(false); }, 50);
+    updateTitleBadge();
   }
 
   function makeRow(s, isUnassigned) {
@@ -711,12 +780,10 @@
       e.dataTransfer.setData('text/plain', s.key);
       dragKey = s.key;
       row.classList.add('dragging');
-      freezeDrawer();
     };
     row.ondragend = function() {
       row.classList.remove('dragging');
       dragKey = null;
-      setTimeout(thawDrawer, 100);
     };
     row.ondragover = function(e) {
       e.preventDefault(); e.stopPropagation();
@@ -904,7 +971,7 @@
 
     render();
     // Watch for station list changes (add/remove favorites)
-    var stationObserver = new MutationObserver(function() { render(); });
+    var stationObserver = new MutationObserver(function() { if (!pauseObserver) render(); });
     var stationsContainer = contentEl.querySelector('[class*=_hideFirstTop]');
     if (stationsContainer) stationObserver.observe(stationsContainer, { childList: true, subtree: true });
   }
@@ -926,6 +993,8 @@
   function unmountOverlay() {
     delete document.body.dataset.fovMounted;
     closeColorPicker();
+    var titleEl = document.querySelector('[id="bht"]');
+    if (titleEl) { var b = titleEl.querySelector('.__fov-title-badge'); if (b) b.remove(); }
     var ov = document.querySelector('.__fov');
     if (ov) ov.remove();
     // Restore overflow on content element
@@ -984,6 +1053,7 @@
 
     // Click listener with slightly longer delay to let routing settle
     document.addEventListener('click', function() {
+      if (pauseObserver) return;
       setTimeout(onNavigate, 250);
     });
 
